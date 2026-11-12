@@ -115,11 +115,55 @@ class AutogradTest < Minitest::Test
     assert_equal "Variable data has to be a tensor, but got Object", error.message
   end
 
+  def test_tensor_requires_grad
+    [[1.0, 2.0], [[1.0, 2.0], [3.0, 4.0]]].each do |data|
+      x = Torch.tensor(data, requires_grad: true)
+      assert x.requires_grad
+      assert x.leaf?
+      (x * x).sum.backward
+      assert_equal Torch.tensor(data).mul(2).to_a, x.grad.to_a
+    end
+  end
+
+  def test_tensor_requires_grad_scalar
+    x = Torch.tensor(3.0, requires_grad: true)
+    assert x.leaf?
+    (x * x).backward
+    assert_in_delta 6.0, x.grad.item
+  end
+
+  def test_tensor_requires_grad_dtype
+    x = Torch.tensor([1.5, 2.5], dtype: :float64, requires_grad: true)
+    assert_equal :float64, x.dtype
+    assert x.leaf?
+    x.sum.backward
+    assert_equal [1.0, 1.0], x.grad.to_a
+    assert_equal :float64, x.grad.dtype
+  end
+
+  def test_tensor_requires_grad_device
+    devices = ["cpu"]
+    devices << "mps" if Torch::Backends::MPS.available?
+    devices << "cuda" if Torch::CUDA.available?
+    devices.each do |device|
+      x = Torch.tensor([1.0, 2.0], device: device, requires_grad: true)
+      assert x.leaf?, "not a leaf on #{device}"
+      (x * x).sum.backward
+      assert_equal [2.0, 4.0], x.grad.cpu.to_a
+    end
+  end
+
+  def test_tensor_requires_grad_false
+    [Torch.tensor([1.0, 2.0]), Torch.tensor([1.0, 2.0], requires_grad: false)].each do |x|
+      assert !x.requires_grad
+      assert x.leaf?
+    end
+  end
+
   # 1.7.0 behavior
   def test_max
     a = Torch.tensor([3.0, 2, 3], requires_grad: true)
     a.max.backward
-    # TODO debug
-    # assert_equal [0.5, 0, 0.5], a.grad.to_a
+    assert_equal [0.5, 0, 0.5], a.grad.to_a
   end
 end

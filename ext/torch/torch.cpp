@@ -19,8 +19,14 @@ torch::Tensor make_tensor(Rice::Array a, const std::vector<int64_t>& size, const
     vec.push_back(Rice::detail::From_Ruby<T>().convert(a[i].value()));
   }
 
-  torch::Tensor t = torch::tensor(vec, options);
-  return t.reshape(size);
+  // create and reshape without requires_grad, since reshape would otherwise
+  // be recorded by autograd, and return a non-leaf tensor whose grad is
+  // never populated
+  torch::Tensor t = torch::tensor(vec, options.requires_grad(false)).reshape(size);
+  if (options.requires_grad()) {
+    t.set_requires_grad(true);
+  }
+  return t;
 }
 
 void init_torch(Rice::Module& m) {
